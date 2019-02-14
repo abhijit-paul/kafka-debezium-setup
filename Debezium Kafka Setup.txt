@@ -1,0 +1,14 @@
+==::Debezium Kafka Setup::==
+Mysql Binary Logging turned on via manually creating new file in /etc/my.cnf with perm 744 and restarting mysql server
+Check if turned on with:
+mysqladmin variables -uroot -p | grep log_bin
+
+Now create a new credential to be used by debezium:
+GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium' IDENTIFIED BY 'dbz';
+
+Put debezium jars in a folder, say `connect` and provide the path in `connect-distributed.properties`
+Add debezium plugin path along with java path in:
+~/grab_repo/kafka_2.12-2.1.0/config/connect-distributed.properties as:
+plugin.path=/usr/share/java,/Users/abhijit.paul/grab_repo/kafka_2.12-2.1.0/connect/
+
+

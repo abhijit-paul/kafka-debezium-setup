@@ -1,0 +1,86 @@
+#Run zookeper:
+sh bin/zookeeper-server-start.sh config/zookeeper.properties
+
+#Run kafka server:
+sh bin/kafka-server-start.sh config/server.properties
+
+#Run distributed server (after making changes to distributed properties): 
+sh bin/connect-distributed.sh config/connect-distributed.properties
+
+curl -i -X POST -H "Accept:application/json" \
+    -H  "Content-Type:application/json" http://localhost:8083/connectors/ \
+    -d '{
+      "name": "mysql-connector",
+      "config": {
+            "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+            "database.hostname": "localhost",
+            "database.port": "3306",
+            "database.user": "debezium",
+            "database.password": "dbz",
+            "database.server.id": "42",
+            "database.server.name": "transaction_history",
+            "database.whitelist":"opac",
+    		"table.whitelist":"opac.CUSTOMER_TRANSACTIONS",
+            "database.history.kafka.bootstrap.servers": "localhost:9092",
+            "database.history.kafka.topic": "wallet.customer_transactions" ,
+            "include.schema.changes": "false"
+       }
+    }'
+
+curl -i -X POST -H "Accept:application/json" \
+    -H  "Content-Type:application/json" http://localhost:8083/connectors/ \
+    -d '{
+      "name": "mysql-connector-rewards",
+      "config": {
+            "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+            "database.hostname": "localhost",
+            "database.port": "3306",
+            "database.user": "debezium",
+            "database.password": "dbz",
+            "database.server.id": "42",
+            "database.server.name": "transaction_history",
+            "database.whitelist":"opac",
+    		"table.whitelist":"opac.CUSTOMER_TRANSACTIONS",
+            "database.history.kafka.bootstrap.servers": "localhost:9092",
+            "database.history.kafka.topic": "rewards.customer_transactions" ,
+            "include.schema.changes": "false"
+       }
+    }'
+
+curl -i -X POST -H "Accept:application/json" \
+    -H  "Content-Type:application/json" http://localhost:8083/connectors/ \
+    -d '{
+      "name": "elastic-sink",
+      "config": {
+            "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+            "tasks.max": "1",
+	        "topics": "wallet.customer_transactions",
+	        "connection.url": "http://localhost:9200",
+	        "transforms": "unwrap,key",
+	        "transforms.unwrap.type": "io.debezium.transforms.UnwrapFromEnvelope",
+	        "transforms.key.type": "org.apache.kafka.connect.transforms.ExtractField$Key",
+	        "transforms.key.field": "id",
+	        "key.ignore": "false",
+	        "type.name": "wallet.customer_transactions"
+       }
+    }'
+
+
+curl -s "http://localhost:8083/connectors"
+
+curl -s "http://localhost:8083/connectors/mysql-connector/status"
+
+sh bin/kafka-topics.sh --zookeeper localhost:2181 --list
+
+sh bin/kafka-console-consumer.sh \
+--bootstrap-server localhost:9092 \
+--property schema.registry.url=http://localhost:8081 \
+--topic wallet.CUSTOMER_TRANSACTIONS \
+--from-beginning | jq '.'
+
+sh bin/kafka-console-consumer.sh \
+--bootstrap-server localhost:9092 \
+--property schema.registry.url=http://localhost:8081 \
+--topic rewards.CUSTOMER_TRANSACTIONS \
+--from-beginning | jq '.'
+
